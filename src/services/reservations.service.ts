@@ -42,7 +42,17 @@ export async function confirmReservation(reservationId: string): Promise<Reserva
     throw fromDbError(error);
   }
 
-  return data as ReservationRow;
+  const reservation = data as ReservationRow;
+
+  // fn_confirm_reservation commits a lazy expiry (releasing the hold) rather
+  // than raising, so the expiry itself is never rolled back. It's this
+  // layer's job to turn "confirm didn't actually confirm" into the 409 the
+  // API contract promises.
+  if (reservation.status === 'EXPIRED') {
+    throw AppError.conflict('INVALID_STATE', `reservation ${reservationId} has expired and cannot be confirmed`);
+  }
+
+  return reservation;
 }
 
 export async function cancelReservation(reservationId: string): Promise<ReservationRow> {

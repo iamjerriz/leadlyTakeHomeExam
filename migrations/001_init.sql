@@ -128,15 +128,21 @@ begin
     raise exception 'INVALID_STATE: reservation % is cancelled and cannot be confirmed', p_reservation_id;
   end if;
 
+  -- Lazily expire a hold whose TTL has lapsed. This does NOT raise -- an
+  -- uncaught exception would roll back the whole transaction, including the
+  -- release we just did, undoing the very thing we're trying to guarantee.
+  -- Instead we commit the expiry and return the row as-is (status EXPIRED);
+  -- the service layer maps a non-CONFIRMED result to a 409.
   if v_res.status = 'PENDING' and v_res.expires_at < now() then
     update reservations set status = 'EXPIRED' where id = p_reservation_id;
     update items set reserved_quantity = reserved_quantity - v_res.quantity, updated_at = now()
       where id = v_res.item_id;
-    raise exception 'INVALID_STATE: reservation % has expired and cannot be confirmed', p_reservation_id;
+    select * into v_res from reservations where id = p_reservation_id;
+    return v_res;
   end if;
 
   if v_res.status = 'EXPIRED' then
-    raise exception 'INVALID_STATE: reservation % has expired and cannot be confirmed', p_reservation_id;
+    return v_res;
   end if;
 
   update items
@@ -232,3 +238,25 @@ begin
   return v_count;
 end;
 $$;
+
+-- ============================================================================
+-- Grants
+--
+-- This API is backend-only and authenticates with Supabase using the
+-- service_role key exclusively. Grant it explicit access to everything
+-- created above (and anything created later), regardless of whether the
+-- Supabase project has "Automatically expose new tables" enabled -- that
+-- dashboard setting only reliably covers anon/authenticated, so without this
+-- block a fresh project can end up with service_role getting
+-- "permission denied" on these tables. anon/authenticated are intentionally
+-- left ungranted, since no client is meant to call Supabase directly.
+-- ============================================================================
+
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
+alter default privileges in schema public grant execute on functions to service_role;
