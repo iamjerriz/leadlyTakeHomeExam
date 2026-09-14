@@ -40,7 +40,7 @@ async function attemptReservation(itemId: string, customerIndex: number): Promis
   const res = await fetch(`${BASE_URL}/v1/reservations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ item_id: itemId, customer_id: `customer-${customerIndex}`, quantity: 1 }),
+    body: JSON.stringify({ item_id: itemId, customer_id: `concurrent-test-${customerIndex}`, quantity: 1 }),
   });
   return res.status;
 }
