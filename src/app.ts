@@ -1,6 +1,6 @@
 import cors from 'cors';
 import express, { Express } from 'express';
-import swaggerUi from 'swagger-ui-express';
+import { renderDocsPage } from './docs/docsPage';
 import { openapiSpec } from './docs/openapi';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import routes from './routes';
@@ -12,7 +12,7 @@ export function createApp(): Express {
   app.use(express.json());
 
   app.get('/openapi.json', (_req, res) => res.json(openapiSpec));
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
+  app.get('/docs', (_req, res) => res.type('html').send(renderDocsPage()));
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
