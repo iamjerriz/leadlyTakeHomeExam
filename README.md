@@ -1,8 +1,8 @@
 # Inventory Reservation API
 
 - **GitHub repo:** https://github.com/iamjerriz/leadlyTakeHomeExam
-- **Deployed Vercel URL:** https://inventory-reservation-api-zeta.vercel.app
-- **Demo video:** _TODO: add link after recording_
+- **Deployed Vercel URL:** https://inventory-reservation-api-zeta.vercel.app (Swagger UI: https://inventory-reservation-api-zeta.vercel.app/docs/)
+- **Demo video:** https://drive.google.com/file/d/1wsJHMvifudw1K6rBforP4_RZAS4btAq7/view?usp=sharing
 
 ## 1. Overview
 
