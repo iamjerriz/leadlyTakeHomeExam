@@ -41,16 +41,34 @@ Grading criteria (from the PDF), in priority order:
 
 ## What's built and verified
 
-All code is written. Verified locally (see transcript): `npm run build` compiles clean with
-no `any`; server boots; `/health`, `/openapi.json`, `/docs` all serve correctly; Zod
-validation and the centralized `{error:{code,message}}` shape work correctly for bad input
-and unknown routes. This was all checked **without** a real Supabase project (dummy env vars
-just to prove the HTTP/validation/docs layer), since no Supabase credentials exist yet.
+Everything is built, deployed, and verified end-to-end against a real Supabase project:
 
-**Not yet verified:** actual reserve/confirm/cancel/expire behavior against a real Postgres
-instance — needs a live Supabase project. `scripts/concurrency-test.ts` is written and ready
-to prove "no overselling" (5-unit item, 10 concurrent 1-unit requests → expects exactly 5
-succeed, 5 get 409) the moment it's pointed at a running instance.
+- GitHub repo: https://github.com/iamjerriz/leadlyTakeHomeExam (pushed, main branch)
+- Supabase project created, migration run, service_role grants applied
+- Deployed to Vercel: https://inventory-reservation-api-zeta.vercel.app (auto-deploys on
+  push to `main` — Vercel connected the GitHub repo directly)
+- Verified locally AND against the deployed URL: create item, reserve, confirm (idempotent),
+  cancel (idempotent), cancel-after-confirm rejected (409), lazy + explicit expiration both
+  release quantity correctly, `npm run concurrency-test` passes against both localhost and
+  the live deployment (5-unit item, 10 concurrent 1-unit reservations → exactly 5 succeed, 5
+  get 409, zero overselling)
+
+**Bug found and fixed during verification:** `fn_confirm_reservation`'s lazy-expiry branch
+used to `UPDATE` (release the hold) and then `RAISE EXCEPTION`. In Postgres, an uncaught
+exception rolls back the whole transaction, including updates that ran earlier in the same
+function call — so the release was silently undone every time. Fixed by having that branch
+return the row normally (status `EXPIRED`, no exception) and having the Node service layer
+(`src/services/reservations.service.ts`) translate a non-`CONFIRMED` result into the 409.
+Same fix pattern `fn_cancel_reservation` already used correctly. Verified fixed by manually
+backdating a reservation's `expires_at` via a throwaway script and confirming release now
+sticks. Commit: "Fix confirm-on-expired rollback bug and fold in service_role grants".
+
+**Also hit and fixed:** Supabase project was created with "Automatically expose new tables"
+disabled (which the user followed on my advice, since it seemed related only to
+anon/authenticated exposure) — this also skips granting `service_role` privileges on new
+tables, causing "permission denied for table items". Fixed by folding explicit
+`GRANT ... TO service_role` + `ALTER DEFAULT PRIVILEGES` statements into `001_init.sql`
+itself, so the single migration file is self-contained regardless of that dashboard toggle.
 
 ### File map
 ```
@@ -68,21 +86,14 @@ scripts/concurrency-test.ts Fires 10 concurrent reservations at a 5-unit item, a
 README.md                   Full setup/deploy/reproduction docs (the graded deliverable)
 ```
 
-## What's left (all needs the user's own accounts/actions)
+## What's left
 
-1. **Supabase**: create a project, run `migrations/001_init.sql` in the SQL Editor, grab
-   `SUPABASE_URL` and the `service_role` key.
-2. **Local verification**: `npm install` → copy `.env.example` to `.env` and fill in real
-   values → `npm run dev` → `npm run concurrency-test` to actually prove no-oversell against
-   a live DB (this hasn't been run yet — do this before recording the demo).
-3. **Git/GitHub**: `git init`, commit, create a GitHub repo, push.
-4. **Vercel**: `vercel` deploy, add the same env vars in the Vercel dashboard, redeploy.
-5. **Demo video** (5–10 min, per PDF section 9): start locally, show `/docs`, create an item
+1. ~~Supabase, Local verification, Git/GitHub, Vercel~~ — all done.
+2. **Demo video** (5–10 min, per PDF section 9): start locally, show `/docs`, create an item
    with qty 5, demonstrate expiration or cancellation freeing up quantity, show the Supabase
-   table state.
-6. **README top-of-file TODOs**: fill in the GitHub link, Vercel URL, and demo video link
-   (currently placeholders).
-7. **Submission**: email the GitHub repo link, Vercel URL, and demo video link (per PDF
+   table state. This is the only remaining deliverable.
+3. **README**: add the demo video link once recorded (still a TODO at the top of the file).
+4. **Submission**: email the GitHub repo link, Vercel URL, and demo video link (per PDF
    section 15).
 
 ## Resuming this conversation
